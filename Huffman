@@ -1,0 +1,256 @@
+import java.util.*;
+import java.util.ArrayList;
+
+import tester.Tester;
+
+class Huffman {
+  ArrayList<String> alphabet;
+  ArrayList<Integer> frequencies;
+  ArrayList<Tree> forest;
+  
+  Huffman(ArrayList<String> alphabet, ArrayList<Integer> frequencies) {
+    if(alphabet.size() < 2 || alphabet.size() != frequencies.size()) {
+      throw new IllegalArgumentException(
+          "The length of alphabet and frequencies must be the same and "
+          + "have at least 2 elements.");
+    }
+    this.alphabet = alphabet;
+    this.frequencies = frequencies;
+    this.forest = new ArrayList<>(); 
+    makeForest();
+  }
+  
+  void makeForest() {
+    for(int i = 0; i < this.frequencies.size(); i++) {
+      this.forest.add(new Leaf(this.alphabet.get(i), this.frequencies.get(i)));
+    }
+    
+    while (this.forest.size() > 1) {
+      Collections.sort(this.forest, new TreeByFrequency());
+      
+      Tree min1 = this.forest.remove(0);
+      Tree min2 = this.forest.remove(0);
+      
+      Node newNode = new Node(min1, min2, (min1.getFrequency() + min2.getFrequency()));
+      
+      this.forest.add(newNode);
+    }
+   
+  }
+  
+  ArrayList<Boolean> encode(String str) {
+    ArrayList<Boolean> result = new ArrayList<Boolean>();
+    
+    for (int i = 0; i < str.length(); i++) {
+      if (!this.alphabet.contains(str.substring(i, i + 1))) {
+        throw new IllegalArgumentException("Tried to encode " + (str.substring(i, i + 1))
+            + " but that is not part of the language.");
+      }
+      
+      this.forest.get(0).encodeHelper((str.substring(i, i + 1)), result);
+    }
+    return result;
+  }
+  
+  String decode(ArrayList<Boolean> al) {
+    String result = "";
+    for(int i = 0; i < al.size(); i++) {
+      if(this.forest.get(0).leaf()) {
+        result.concat(this.forest.get(0).decodeHelper());
+      }
+    }
+    return result;
+  }
+}
+
+class TreeByFrequency implements Comparator<Tree> {
+  public int compare(Tree t1, Tree t2) {
+    return Integer.compare(t1.getFrequency(), t2.getFrequency());
+  }
+}
+
+
+interface Tree {
+  int getFrequency();
+  
+  Tree getRedorBlue(String str);
+  
+  void encodeHelper(String letter, ArrayList<Boolean> result);
+  
+  boolean hasLetter(String letter);
+  
+  boolean leaf();
+  
+  String decodeHelper();
+}
+
+class Leaf implements Tree{
+  String character;
+  int frequency;
+  
+  Leaf(String character, int frequency) {
+    this.character = character;
+    this.frequency = frequency;
+  }
+
+  public int getFrequency() {
+    return this.frequency;
+  }
+
+  public Tree getRedorBlue(String str) {
+    return this;
+  }
+
+  public void encodeHelper(String letter, ArrayList<Boolean> result) {
+    if(this.character.equals(letter)) {
+      return;
+    }
+  }
+
+  public boolean hasLetter(String letter) {
+    return this.character.equals(letter);
+  }
+
+  public boolean leaf() {
+    return true;
+  }
+
+  public String decodeHelper() {
+    return this.character;
+  }
+
+}
+
+class Node implements Tree{
+  Tree red;
+  Tree blue;
+  int total;
+  
+  Node(Tree red, Tree blue, int total) {
+    this.red = red;
+    this.blue = blue;
+    this.total = total;
+  }
+
+  public int getFrequency() {
+    return this.total;
+  }
+  
+  public Tree getRedorBlue(String str) {
+    if(str.equals("red")) {
+      return this.red;
+    }
+    else {
+      return this.blue;
+    }
+  }
+
+  public void encodeHelper(String letter, ArrayList<Boolean> result) {
+    if (this.red.hasLetter(letter)) {
+      if (this.red.leaf()) {
+        result.add(false);
+      }
+      else {
+        result.add(false);
+        this.red.encodeHelper(letter, result);
+      }
+    }
+
+    else {
+      if (this.blue.leaf()) {
+        result.add(true);
+      }
+      else {
+        result.add(true);
+        this.blue.encodeHelper(letter, result);
+      }
+    }
+
+  }
+
+  public boolean hasLetter(String letter) {
+    return this.red.hasLetter(letter) || this.blue.hasLetter(letter);
+  }
+
+  public boolean leaf() {
+    return false;
+  }
+
+  public String decodeHelper() {
+    return null;
+  }
+}
+
+class ExamplesHuffman {
+  ArrayList<String> alphabet;
+  ArrayList<Integer> freq;
+  ArrayList<Tree> forest1;
+  
+  void init() {
+    this.alphabet = new ArrayList<String>(Arrays.asList("a", "b", "c", "d", "e", "f"));
+    this.freq = new ArrayList<Integer>(Arrays.asList(1, 4, 2, 3, 5, 9));
+    this.forest1 = new ArrayList<Tree>();
+
+  }
+
+  void testMakeForest(Tester t) {
+    this.init();
+    Huffman h1 = new Huffman(this.alphabet, this.freq);
+    
+    //Makes sure that after calling makeForest(), the forest contains only one tree/node
+    t.checkExpect(h1.forest.size(), 1);
+
+    //Makes sure that the root of the tree has the right frequency after calling makeForest()
+    t.checkExpect((h1.forest.get(0)).getFrequency(), 24);
+    
+    //makes sure the tree has the correct right/red side after calling makeForest()
+    t.checkExpect((h1.forest.get(0)).getRedorBlue("red"),
+        new Node(new Leaf("b", 4), new Leaf("e", 5), 9));
+    
+    //makes sure the tree has the correct left/blue side after calling makeForest()
+    t.checkExpect((h1.forest.get(0)).getRedorBlue("blue"),
+        new Node(new Node(new Leaf("d", 3), new Node(new Leaf("a", 1), new Leaf("c", 2), 3), 6),
+            new Leaf("f", 9), 15));
+  }
+  
+  boolean testEncode(Tester t) {
+    this.init();
+    
+    Huffman h1 = new Huffman(this.alphabet, this.freq);
+    
+    return 
+         t.checkExpect(h1.encode("b"), new ArrayList<Boolean>(Arrays.asList(false, false)))
+        && t.checkExpect(h1.encode("fab"), new ArrayList<Boolean>(Arrays.asList(true, true, true, false, true, false, false, false)))
+        
+        && t.checkExpect(h1.encode("e"), new ArrayList<Boolean>(Arrays.asList(false, true)))
+        && t.checkExpect(h1.encode("f"), new ArrayList<Boolean>(Arrays.asList(true, true)))
+        && t.checkExpect(h1.encode("d"), new ArrayList<Boolean>(Arrays.asList(true, false, false)))
+        && t.checkExpect(h1.encode("a"), new ArrayList<Boolean>(Arrays.asList(true, false, true, false)))
+        && t.checkExpect(h1.encode("c"), new ArrayList<Boolean>(Arrays.asList(true, false, true, true)))
+        && t.checkExpect(h1.encode("ba"), new ArrayList<Boolean>(Arrays.asList(false, false, true, false, true, false)))
+        && t.checkExpect(h1.encode("fec"), new ArrayList<Boolean>(Arrays.asList(true, true, false, true, true, false, true, true)))
+        && t.checkExpect(h1.encode("ddd"), new ArrayList<Boolean>(Arrays.asList(true, false, false, true, false, false, true, false, false)));
+       // && t.checkExpect(h1.encode("z"), new IllegalArgumentException("Tried to encode z but that is not part of the language."))
+        //&& t.checkExpect(h1.encode("bn"), new IllegalArgumentException("Tried to encode n but that is not part of the language."))
+       // && t.checkExpect(h1.encode("aaapl"), new IllegalArgumentException("Tried to encode p but that is not part of the language."));
+  }
+  
+  boolean testDecode(Tester t) {
+    this.init();
+    Huffman h2 = new Huffman(this.alphabet, this.freq);
+    
+    return 
+        t.checkExpect(h2.decode(new ArrayList<Boolean>(Arrays.asList(false, false))), "b")
+       && t.checkExpect(h2.decode(new ArrayList<Boolean>(Arrays.asList(true, true, true, false, true, false, false, false))), "fab")
+       
+       && t.checkExpect(h2.decode(new ArrayList<Boolean>(Arrays.asList(false, true))), "e")
+       && t.checkExpect(h2.decode(new ArrayList<Boolean>(Arrays.asList(true, true))), "f")
+       && t.checkExpect(h2.decode(new ArrayList<Boolean>(Arrays.asList(true, false, false))), "d")
+       && t.checkExpect(h2.decode(new ArrayList<Boolean>(Arrays.asList(true, false, true, false))), "a")
+       && t.checkExpect(h2.decode(new ArrayList<Boolean>(Arrays.asList(true, false, true, true))), "c")
+       && t.checkExpect(h2.decode(new ArrayList<Boolean>(Arrays.asList(false, false, true, false, true, false))), "ba")
+       && t.checkExpect(h2.decode(new ArrayList<Boolean>(Arrays.asList(true, true, false, true, true, false, true, true))), "fec")
+       && t.checkExpect(h2.decode(new ArrayList<Boolean>(Arrays.asList(true, false, false, true, false, false, true, false, false))), "ddd");
+  }
+ 
+}
